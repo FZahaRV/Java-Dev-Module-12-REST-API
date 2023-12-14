@@ -1,18 +1,17 @@
 package com.goit.notes;
 
+import com.goit.generic_response.Response;
 import com.goit.notes.dto.create.CreateNoteRequest;
-import com.goit.notes.dto.create.CreateNoteResponse;
-import com.goit.notes.dto.delete.DeleteNoteResponse;
-import com.goit.notes.dto.get.GetUserNotesResponse;
 import com.goit.notes.dto.update.UpdateNoteRequest;
-import com.goit.notes.dto.update.UpdateNoteResponse;
 import com.goit.users.User;
 import com.goit.users.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class NoteService {
@@ -20,28 +19,31 @@ public class NoteService {
     private static final int MAX_CONTENT_LENGTH = 1000;
     private final UserService userService;
     private final NoteRepository repository;
-    private Optional<CreateNoteResponse.Error> validateCreateFields(CreateNoteRequest request) {
+
+    private Optional<Response.Error> validateCreateFields(CreateNoteRequest request) {
         if (Objects.isNull(request.getTitle()) || request.getTitle().length() > MAX_TITLE_LENGTH) {
-            return Optional.of(CreateNoteResponse.Error.invalidTitle);
+            return Optional.of(Response.Error.INVALID_TITLE);
         }
         if (Objects.isNull(request.getContent()) || request.getContent().length() > MAX_CONTENT_LENGTH) {
-            return Optional.of(CreateNoteResponse.Error.invalidTitle);
+            return Optional.of(Response.Error.INVALID_CONTENT);
         }
         return Optional.empty();
     }
-    private Optional<UpdateNoteResponse.Error> validateUpdateFields(UpdateNoteRequest request) {
+
+    private Optional<Response.Error> validateUpdateFields(UpdateNoteRequest request) {
         if (Objects.nonNull(request.getTitle()) && request.getTitle().length() > MAX_TITLE_LENGTH) {
-            return  Optional.of(UpdateNoteResponse.Error.invalidTitleLength);
+            return Optional.of(Response.Error.INVALID_TITLE);
         }
         if (Objects.nonNull(request.getContent()) && request.getContent().length() > MAX_CONTENT_LENGTH) {
-            return Optional.of(UpdateNoteResponse.Error.invalidContentLength);
+            return Optional.of(Response.Error.INVALID_CONTENT);
         }
         return Optional.empty();
     }
-    public CreateNoteResponse create(String username, CreateNoteRequest request) {
-        Optional<CreateNoteResponse.Error> validationError = validateCreateFields(request);
-        if(validationError.isPresent()) {
-            return CreateNoteResponse.failed(validationError.get());
+
+    public Response<String> create(String username, CreateNoteRequest request) {
+        Optional<Response.Error> validationError = validateCreateFields(request);
+        if (validationError.isPresent()) {
+            return Response.failed(validationError.get());
         }
         User user = userService.findByUsername(username);
         Note createdNote = repository.save(Note.builder()
@@ -49,44 +51,48 @@ public class NoteService {
                 .title(request.getTitle())
                 .content(request.getContent())
                 .build());
-        return CreateNoteResponse.success(createdNote.getId());
+        return Response.success(String.valueOf(createdNote.getId()));
     }
-    public GetUserNotesResponse getUserNotes(String username) {
+
+    public Response<List<Note>> getUserNotes(String username) {
         List<Note> userNotes = repository.getUserNotes(username);
-        return GetUserNotesResponse.success(userNotes);
+        return Response.success(userNotes);
     }
-    public UpdateNoteResponse update(String username, UpdateNoteRequest request) {
+
+    public Response<Note> update(String username, UpdateNoteRequest request) {
         Optional<Note> optionalNote = repository.findById(request.getId());
         if (optionalNote.isEmpty()) {
-            return UpdateNoteResponse.failed(UpdateNoteResponse.Error.invalidNoteId);
+            return Response.failed(Response.Error.INVALID_CONTENT);
         }
         Note note = optionalNote.get();
         boolean isNotUserNote = isNotUserNote(username, note);
         if (isNotUserNote) {
-            return UpdateNoteResponse.failed(UpdateNoteResponse.Error.insufficientPrivileges);
+            return Response.failed(Response.Error.INVALID_CONTENT);
         }
-        Optional<UpdateNoteResponse.Error> validationError = validateUpdateFields(request);
+        Optional<Response.Error> validationError = validateUpdateFields(request);
         if (validationError.isPresent()) {
-            return UpdateNoteResponse.failed(validationError.get());
+            return Response.failed(validationError.get());
         }
         note.setTitle(request.getTitle());
         note.setContent(request.getContent());
         repository.save(note);
-        return UpdateNoteResponse.success(note);
+        return Response.success(note);
     }
-    public DeleteNoteResponse delete(String username, String id) {
+
+    public Response<Void> delete(String username, String id) {
         Optional<Note> optionalNote = repository.findById(id);
         if (optionalNote.isEmpty()) {
-            return DeleteNoteResponse.failed(DeleteNoteResponse.Error.invalidNoteId);
+            return Response.failed(Response.Error.INVALID_CONTENT);
         }
         Note note = optionalNote.get();
         boolean isNotUserNote = isNotUserNote(username, note);
         if (isNotUserNote) {
-            return DeleteNoteResponse.failed(DeleteNoteResponse.Error.insufficientPrivileges);
+            return Response.failed(Response.Error.INVALID_CONTENT);
         }
         repository.delete(note);
-        return DeleteNoteResponse.success();
+        return Response.success(null);
     }
+
     private boolean isNotUserNote(String username, Note note) {
         return !note.getUser().getUserId().equals(username);
     }

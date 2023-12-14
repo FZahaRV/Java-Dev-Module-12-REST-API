@@ -1,9 +1,8 @@
 package com.goit.auth;
 
 import com.goit.auth.dto.login.LoginRequest;
-import com.goit.auth.dto.login.LoginResponse;
 import com.goit.auth.dto.registration.RegistrationRequest;
-import com.goit.auth.dto.registration.RegistrationResponse;
+import com.goit.generic_response.Response;
 import com.goit.security.JWTUtils;
 import com.goit.users.User;
 import com.goit.users.UserRepository;
@@ -11,8 +10,10 @@ import com.goit.users.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
 import java.util.Objects;
 import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -20,65 +21,75 @@ public class AuthService {
     private static final int MAX_PASSWORD_LENGTH = 255;
     private static final int MAX_NAME_LENGTH = 100;
     private static final int MAX_AGE = 100;
+
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final JWTUtils jwtUtil;
     private final UserRepository repository;
-    public RegistrationResponse register(RegistrationRequest request) {
+
+    public Response<Void> register(RegistrationRequest request) {
         User existingUser = userService.findByUsername(request.getEmail());
         if (Objects.nonNull(existingUser)) {
-            return RegistrationResponse.failed(RegistrationResponse.Error.userAlreadyExists);
+            return Response.failed(Response.Error.USER_ALREADY_EXISTS);
         }
-        Optional<RegistrationResponse.Error> validationError = validateRegistrationFields(request);
 
+        Optional<Response.Error> validationError = validateRegistrationFields(request);
         if (validationError.isPresent()) {
-            return RegistrationResponse.failed(validationError.get());
+            return Response.failed(validationError.get());
         }
+
         repository.save(User.builder()
                 .userId(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
                 .age(request.getAge())
                 .build());
-        return RegistrationResponse.success();
+
+        return Response.success(null);
     }
-    public LoginResponse login(LoginRequest request) {
-        Optional<LoginResponse.Error> validationError = validateLoginFields(request);
+
+    public Response<String> login(LoginRequest request) {
+        Optional<Response.Error> validationError = validateLoginFields(request);
         if (validationError.isPresent()) {
-            return LoginResponse.failed(validationError.get());
+            return Response.failed(validationError.get());
         }
+
         User user = userService.findByUsername(request.getEmail());
 
         if (Objects.isNull(user)) {
-            return LoginResponse.failed(LoginResponse.Error.invalidEmail);
+            return Response.failed(Response.Error.INVALID_EMAIL);
         }
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            return LoginResponse.failed(LoginResponse.Error.invalidPassword);
+            return Response.failed(Response.Error.INVALID_PASSWORD);
         }
+
         String authToken = jwtUtil.generateToken(request.getEmail());
-        return LoginResponse.success(authToken);
+        return Response.success(authToken);
     }
-    private Optional<RegistrationResponse.Error> validateRegistrationFields(RegistrationRequest request) {
+
+    private Optional<Response.Error> validateRegistrationFields(RegistrationRequest request) {
         if (Objects.isNull(request.getEmail()) || request.getEmail().length() > MAX_USER_ID_LENGTH) {
-            return Optional.of(RegistrationResponse.Error.invalidEmail);
+            return Optional.of(Response.Error.INVALID_EMAIL);
         }
         if (Objects.isNull(request.getPassword()) || request.getPassword().length() > MAX_PASSWORD_LENGTH) {
-            return Optional.of(RegistrationResponse.Error.invalidPassword);
+            return Optional.of(Response.Error.INVALID_PASSWORD);
         }
         if (Objects.isNull(request.getName()) || request.getName().length() > MAX_NAME_LENGTH) {
-            return Optional.of(RegistrationResponse.Error.invalidName);
+            return Optional.of(Response.Error.INVALID_NAME);
         }
-        if (Objects.isNull(request.getAge()) || request.getAge() > MAX_AGE) {
-            return Optional.of(RegistrationResponse.Error.invalidAge);
+        if (request.getAge() > MAX_AGE) {
+            return Optional.of(Response.Error.INVALID_AGE);
         }
         return Optional.empty();
     }
-    private Optional<LoginResponse.Error> validateLoginFields(LoginRequest request) {
+
+    private Optional<Response.Error> validateLoginFields(LoginRequest request) {
         if (Objects.isNull(request.getEmail()) || request.getEmail().length() > MAX_USER_ID_LENGTH) {
-            return Optional.of(LoginResponse.Error.invalidEmail);
+            return Optional.of(Response.Error.INVALID_EMAIL);
         }
         if (Objects.isNull(request.getPassword()) || request.getPassword().length() > MAX_PASSWORD_LENGTH) {
-            return Optional.of(LoginResponse.Error.invalidPassword);
+            return Optional.of(Response.Error.INVALID_PASSWORD);
         }
         return Optional.empty();
     }
